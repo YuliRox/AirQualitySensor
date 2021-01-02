@@ -18,10 +18,9 @@ std::string subscribeTopic = mqttBaseTopic + "/" + mqttClientId + "/heat";
 CCS811 ccs811(D3); // nWAKE on D3
 HDC1080 hdc1080(0x40);
 
-IPAddress server(brokerIpAdress[0], brokerIpAdress[1], brokerIpAdress[2], brokerIpAdress[3]);
-
 void callback(char *topic, byte *payload, unsigned int length)
 {
+#if DEBUG
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -30,34 +29,49 @@ void callback(char *topic, byte *payload, unsigned int length)
     Serial.print((char)payload[i]);
   }
   Serial.println();
+#endif
 }
 
 void setup()
 {
-
+#if DEBUG
   Serial.begin(115200);
-  delay(500);
-
-  Serial.println("Connecting to ");
+  while (!Serial)
+  {
+    yield();
+  }
+  //delay(500);
+  Serial.print("Connecting to ");
   Serial.println(ssid);
+#endif
 
   WiFi.begin(ssid, pass);
-  while (WiFi.status() != WL_CONNECTED)
+  WiFi.setAutoReconnect(true);
+  WiFi.setAutoConnect(true);
+  int8_t result = WiFi.waitForConnectResult();
+  if (result != WL_CONNECTED)
   {
-    delay(500);
-    Serial.print(".");
+#if DEBUG
+    Serial.println("could not connect to WIFI");
+#endif
+    return;
   }
+
+#if DEBUG
   Serial.println("");
   Serial.print("WiFi connected - ");
-  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.localIP().toString());
+#endif
 
-  mqttClient.setServer(server, 1883);
+  mqttClient.setServer(brokerServer, brokerPort);
   mqttClient.setCallback(callback);
-  mqttClient.subscribe("airquality/heat");
+  mqttClient.subscribe(subscribeTopic.c_str());
 
+#if DEBUG
   Serial.println("");
   Serial.print("setup: ccs811 lib  version: ");
   Serial.println(CCS811_VERSION);
+#endif
 
   // Enable I2C
   Wire.begin();
@@ -65,6 +79,7 @@ void setup()
   // Enable CCS811
   ccs811.set_i2cdelay(50); // Needed for ESP8266 because it doesn't handle I2C clock stretch correctly
   bool ok = ccs811.begin();
+#if DEBUG
   if (!ok)
     Serial.println("setup: CCS811 begin FAILED");
 
@@ -75,23 +90,29 @@ void setup()
   Serial.println(ccs811.bootloader_version(), HEX);
   Serial.print("setup: application version: ");
   Serial.println(ccs811.application_version(), HEX);
+#endif
 
   // Start measuring
   ok = ccs811.start(CCS811_MODE_1SEC);
+#if DEBUG
   if (!ok)
     Serial.println("setup: CCS811 start FAILED");
+#endif
 
   hdc1080.setResolution(HDC1080_RESOLUTION_14BIT, HDC1080_RESOLUTION_14BIT);
+
 #if DEBUG
-  Serial.print("setup: hdc device id: "); Serial.println(hdc1080.readDeviceId(), HEX);
+  Serial.print("setup: hdc device id: ");
+  Serial.println(hdc1080.readDeviceId(), HEX);
   HDC1080_SerialNumber serialNumber = hdc1080.readSerialNumber();
   Serial.print("setup: hdc serial id: ");
   Serial.print(serialNumber.serialFirst, HEX);
-  Serial.print("-"); 
+  Serial.print("-");
   Serial.print(serialNumber.serialMid, HEX);
-  Serial.print("-"); 
+  Serial.print("-");
   Serial.println(serialNumber.serialLast, HEX);
-  Serial.print("setup: hdc manufact.: "); Serial.println(hdc1080.readManufacturerId(), HEX);
+  Serial.print("setup: hdc manufact.: ");
+  Serial.println(hdc1080.readManufacturerId(), HEX);
 #endif
 }
 
@@ -100,19 +121,25 @@ void reconnect()
   // Loop until we're reconnected
   while (!mqttClient.connected())
   {
+#if DEBUG
     Serial.print("Attempting MQTT connection...");
+#endif
     // Attempt to connect
     if (mqttClient.connect(mqttClientId.c_str()))
     {
+#if DEBUG
       Serial.println("connected");
+#endif
       // ... and resubscribe
       mqttClient.subscribe(subscribeTopic.c_str());
     }
     else
     {
+#if DEBUG
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
       Serial.println(" try again in 5 seconds");
+#endif
       // Wait 5 seconds before retrying
       delay(5000);
     }
@@ -129,10 +156,17 @@ void loop()
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
   double humid = hdc1080.getHumidity();
+
+#if DEBUG
   Serial.print("HDC1080: ");
-  Serial.print("temp2=");  Serial.print(temp);     Serial.print(" celsius  ");
-  Serial.print("humid2="); Serial.print(humid);    Serial.print(" %  ");
+  Serial.print("temp2=");
+  Serial.print(temp);
+  Serial.print(" celsius  ");
+  Serial.print("humid2=");
+  Serial.print(humid);
+  Serial.print(" %  ");
   Serial.println();
+#endif
 
   //TODO
   //ccs811.set_envdata(hdc1080.getTemperatureAsCCS(), hdc1080.getHumidityAsCCS());
@@ -143,7 +177,7 @@ void loop()
   // Print measurement results based on status
   if (errstat == CCS811_ERRSTAT_OK)
   {
-    char co2AsStr[80];
+    char co2AsStr[6];
     sprintf(co2AsStr, "%d", eco2);
 
     std::string payload = "{\"CO2\":{";
@@ -152,6 +186,7 @@ void loop()
     payload += ",\"Unit\":\"ppm\"}}";
 
     mqttClient.publish(publishTopic.c_str(), payload.c_str());
+#if DEBUG
     //Serial.print("CCS811: "); Serial.print("eco2="); Serial.print(eco2); Serial.print(" ppm  "); Serial.println();
     /*
     Serial.print("etvoc="); Serial.print(etvoc); Serial.print(" ppb  ");
@@ -159,21 +194,28 @@ void loop()
     Serial.print("raw10="); Serial.print(raw % 1024); Serial.print(" ADC  ");
     Serial.print("R="); Serial.print((1650 * 1000L / 1023) * (raw % 1024) / (raw / 1024)); Serial.print(" ohm");
     */
+#endif
   }
   else if (errstat == CCS811_ERRSTAT_OK_NODATA)
   {
+#if DEBUG
     Serial.println("CCS811: waiting for (new) data");
+#endif
   }
   else if (errstat & CCS811_ERRSTAT_I2CFAIL)
   {
+#if DEBUG
     Serial.println("CCS811: I2C error");
+#endif
   }
   else
   {
+#if DEBUG
     Serial.print("CCS811: errstat=");
     Serial.print(errstat, HEX);
     Serial.print("=");
     Serial.println(ccs811.errstat_str(errstat));
+#endif
   }
 
   // Wait

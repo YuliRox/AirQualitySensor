@@ -1,5 +1,12 @@
+#include <string>
+
 const char *ssid = ""; // replace with your wifi ssid and wpa2 key
 const char *pass = "";
-int brokerIpAdress[4] = {0, 0, 0, 0};
+
+int brokerPort = 1883;
+int brokerIpAdress[] = {0, 0, 0, 0};
+IPAddress brokerServer(brokerIpAdress[0], brokerIpAdress[1], brokerIpAdress[2], brokerIpAdress[3]);
+//const char *brokerServer = "";
+
 const std::string mqttClientId = "IoT-Node-0";
 const std::string mqttBaseTopic = "airquality";
