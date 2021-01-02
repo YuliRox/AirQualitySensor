@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>   // I2C library
 #include "ccs811.h" // CCS811 library
+#include "HDC1080.h"
 //#include <SPI.h>
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
@@ -15,8 +16,8 @@ std::string subscribeTopic = mqttBaseTopic + "/" + mqttClientId + "/heat";
 
 // Wiring for ESP8266 NodeMCU boards: VDD to 3V3, GND to GND, SDA to D2, SCL to D1, nWAKE to D3 (or GND)
 CCS811 ccs811(D3); // nWAKE on D3
+HDC1080 hdc1080(0x40);
 
-// Update these with values suitable for your network.
 IPAddress server(brokerIpAdress[0], brokerIpAdress[1], brokerIpAdress[2], brokerIpAdress[3]);
 
 void callback(char *topic, byte *payload, unsigned int length)
@@ -79,6 +80,19 @@ void setup()
   ok = ccs811.start(CCS811_MODE_1SEC);
   if (!ok)
     Serial.println("setup: CCS811 start FAILED");
+
+  hdc1080.setResolution(HDC1080_RESOLUTION_14BIT, HDC1080_RESOLUTION_14BIT);
+#if DEBUG
+  Serial.print("setup: hdc device id: "); Serial.println(hdc1080.readDeviceId(), HEX);
+  HDC1080_SerialNumber serialNumber = hdc1080.readSerialNumber();
+  Serial.print("setup: hdc serial id: ");
+  Serial.print(serialNumber.serialFirst, HEX);
+  Serial.print("-"); 
+  Serial.print(serialNumber.serialMid, HEX);
+  Serial.print("-"); 
+  Serial.println(serialNumber.serialLast, HEX);
+  Serial.print("setup: hdc manufact.: "); Serial.println(hdc1080.readManufacturerId(), HEX);
+#endif
 }
 
 void reconnect()
@@ -111,6 +125,17 @@ void loop()
   {
     reconnect();
   }
+
+  hdc1080.readTempHumid();
+  double temp = hdc1080.getTemperature();
+  double humid = hdc1080.getHumidity();
+  Serial.print("HDC1080: ");
+  Serial.print("temp2=");  Serial.print(temp);     Serial.print(" celsius  ");
+  Serial.print("humid2="); Serial.print(humid);    Serial.print(" %  ");
+  Serial.println();
+
+  //TODO
+  //ccs811.set_envdata(hdc1080.getTemperatureAsCCS(), hdc1080.getHumidityAsCCS());
   // Read
   uint16_t eco2, etvoc, errstat, raw;
   ccs811.read(&eco2, &etvoc, &errstat, &raw);
