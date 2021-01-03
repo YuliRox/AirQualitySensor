@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
+
 #include <iostream>
 #include <sstream>
 #include <Wire.h>   // I2C library
@@ -12,6 +14,14 @@
 
 #define DEBUG 1
 
+#ifdef DEBUG
+#define CONSOLE(...) Serial.print(__VA_ARGS__);
+#define CONSOLELN(...) Serial.println(__VA_ARGS__);
+#else
+#define CONSOLE(x) ;
+#define CONSOLELN CONSOLE
+#endif
+
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
@@ -21,46 +31,15 @@ const char *publishTopic = publishTopicStr.c_str();
 // Wiring for ESP8266 NodeMCU boards: VDD to 3V3, GND to GND, SDA to D2, SCL to D1, nWAKE to D3 (or GND)
 CCS811 ccs811(D3); // nWAKE on D3
 HDC1080 hdc1080(0x40);
+uint64_t activeBegin;
 
-void setup()
+void initSensors()
 {
-#if DEBUG
-  Serial.begin(115200);
-  while (!Serial)
-  {
-    yield();
-  }
-
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-#endif
-
-  WiFi.begin(ssid, pass);
-  WiFi.setAutoReconnect(true);
-  WiFi.setAutoConnect(true);
-  int8_t result = WiFi.waitForConnectResult();
-  if (result != WL_CONNECTED)
-  {
-#if DEBUG
-    Serial.println("could not connect to WIFI");
-#endif
-    return;
-  }
-
-#if DEBUG
-  Serial.println("");
-  Serial.print("WiFi connected - ");
-  Serial.println(WiFi.localIP().toString());
-#endif
-
-  mqttClient.setServer(brokerServer, brokerPort);
-
 #if DEBUG
   Serial.println("");
   Serial.print("setup: ccs811 lib  version: ");
   Serial.println(CCS811_VERSION);
 #endif
-
   // Enable I2C
   Wire.begin();
 
@@ -102,6 +81,61 @@ void setup()
   Serial.print("setup: hdc manufact.: ");
   Serial.println(hdc1080.readManufacturerId(), HEX);
 #endif
+}
+
+void initWiFi()
+{
+#if DEBUG
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+#endif
+
+  WiFi.begin(ssid, pass);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.setAutoConnect(true);
+  int8_t result = WiFi.waitForConnectResult();
+  if (result != WL_CONNECTED)
+  {
+    goodNight(activeBegin);
+    return;
+  }
+
+#if DEBUG
+  Serial.println("");
+  Serial.print("WiFi connected - ");
+  Serial.println(WiFi.localIP().toString());
+#endif
+}
+
+void initMqtt()
+{
+  mqttClient.setServer(brokerServer, brokerPort);
+  mqttClient.connect(mqttClientId.c_str());
+  if (!mqttClient.connected())
+  {
+    if (!reconnect())
+    {
+      goodNight(activeBegin);
+      return;
+    }
+  }
+}
+
+void setup()
+{
+  activeBegin = millis();
+#if DEBUG
+  Serial.begin(115200);
+  while (!Serial)
+  {
+    yield();
+  }
+#endif
+
+  initSensors();
+
+  //initWiFi();
 }
 
 bool reconnect()
@@ -156,34 +190,35 @@ void goodNight(uint64_t activeBegin)
   Serial.println("going into deep sleep");
 #endif
   //scale to uS and sleep
-  ESP.deepSleep((uint64_t)remainingSleep * (uint64_t)1000);
+  ESP.deepSleep((uint64_t)remainingSleep * (uint64_t)1000, WAKE_RF_DEFAULT);
+}
+
+void sendData(double temp, double humid, uint16_t eco2, uint16_t etvoc)
+{
+  StaticJsonDocument<256> doc;
+  doc["CO2"] = eco2;
+  doc["VOC"] = etvoc;
+  doc["Temperature"] = temp;
+  doc["Humidity"] = humid;
+
+  std::string payloadStr;
+
+  serializeJson(doc, payloadStr);
+
+  initWiFi();
+
+  initMqtt();
+  mqttClient.publish(publishTopic, payloadStr.c_str());
+
+  mqttClient.loop();
+  mqttClient.disconnect();
 }
 
 void loop()
 {
-  uint64_t activeBegin = millis();
-
-  int8_t result = WiFi.waitForConnectResult();
-  if (result != WL_CONNECTED)
-  {
-    goodNight(activeBegin);
-    return;
-  }
-
-  if (!mqttClient.connected())
-  {
-    if (!reconnect())
-    {
-      goodNight(activeBegin);
-      return;
-    }
-  }
-  mqttClient.loop();
-
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
   double humid = hdc1080.getHumidity();
-
 #if DEBUG
   Serial.print("HDC1080: ");
   Serial.print("temp2=");
@@ -194,7 +229,6 @@ void loop()
   Serial.print(" %  ");
   Serial.println();
 #endif
-
   //TODO
   //ccs811.set_envdata(hdc1080.getTemperatureAsCCS(), hdc1080.getHumidityAsCCS());
 
@@ -205,18 +239,9 @@ void loop()
   // Print measurement results based on status
   if (errstat == CCS811_ERRSTAT_OK)
   {
-    std::ostringstream payloadStream;
-    payloadStream << "{";
-    payloadStream << "\"CO²\":" << eco2 << ",";
-    payloadStream << "\"VOC\":" << etvoc << ",";
-    payloadStream.precision(2);
-    payloadStream << "\"Temperature\":" << temp << ",";
-    payloadStream.precision(2);
-    payloadStream << "\"Humidity\":" << humid;
-    payloadStream << "}";
-    const char *payload = payloadStream.str().c_str();
+    sendData(temp, humid, eco2, etvoc);
 
-    mqttClient.publish(publishTopic, payload);
+    goodNight(activeBegin);
 
 #if DEBUG
     Serial.print("CCS811: ");
@@ -259,6 +284,5 @@ void loop()
     Serial.println(ccs811.errstat_str(errstat));
 #endif
   }
-  mqttClient.loop();
-  goodNight(activeBegin);
+  delay(500);
 }
