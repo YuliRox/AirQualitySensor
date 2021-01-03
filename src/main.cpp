@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <iostream>
+#include <sstream>
 #include <Wire.h>   // I2C library
 #include "ccs811.h" // CCS811 library
 #include "HDC1080.h"
@@ -8,29 +10,17 @@
 
 #include "config.h"
 
+#define DEBUG 1
+
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-std::string publishTopic = mqttBaseTopic + "/" + mqttClientId + "/measurements";
-std::string subscribeTopic = mqttBaseTopic + "/" + mqttClientId + "/heat";
+std::string publishTopicStr = mqttBaseTopic + "/" + mqttClientId + "/measurements";
+const char *publishTopic = publishTopicStr.c_str();
 
 // Wiring for ESP8266 NodeMCU boards: VDD to 3V3, GND to GND, SDA to D2, SCL to D1, nWAKE to D3 (or GND)
 CCS811 ccs811(D3); // nWAKE on D3
 HDC1080 hdc1080(0x40);
-
-void callback(char *topic, byte *payload, unsigned int length)
-{
-#if DEBUG
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (unsigned int i = 0; i < length; i++)
-  {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-#endif
-}
 
 void setup()
 {
@@ -40,7 +30,7 @@ void setup()
   {
     yield();
   }
-  //delay(500);
+
   Serial.print("Connecting to ");
   Serial.println(ssid);
 #endif
@@ -64,8 +54,6 @@ void setup()
 #endif
 
   mqttClient.setServer(brokerServer, brokerPort);
-  mqttClient.setCallback(callback);
-  mqttClient.subscribe(subscribeTopic.c_str());
 
 #if DEBUG
   Serial.println("");
@@ -116,10 +104,10 @@ void setup()
 #endif
 }
 
-void reconnect()
+bool reconnect()
 {
   // Loop until we're reconnected
-  while (!mqttClient.connected())
+  for (int reconnectTry = 0; reconnectTry < 3; reconnectTry++)
   {
 #if DEBUG
     Serial.print("Attempting MQTT connection...");
@@ -131,7 +119,7 @@ void reconnect()
       Serial.println("connected");
 #endif
       // ... and resubscribe
-      mqttClient.subscribe(subscribeTopic.c_str());
+      return true;
     }
     else
     {
@@ -144,14 +132,53 @@ void reconnect()
       delay(5000);
     }
   }
+  return false;
+}
+
+void goodNight(uint64_t activeBegin)
+{
+  uint64_t timeTakenMs = ((uint64_t)millis() - activeBegin);
+  if (intervalMs < timeTakenMs)
+  {
+    return;
+  }
+  uint64_t remainingSleep = intervalMs - timeTakenMs;
+
+  if (remainingSleep < 1000)
+  {
+#if DEBUG
+    Serial.println("going into fake sleep");
+#endif
+    delay(remainingSleep);
+    return;
+  }
+#if DEBUG
+  Serial.println("going into deep sleep");
+#endif
+  //scale to uS and sleep
+  ESP.deepSleep((uint64_t)remainingSleep * (uint64_t)1000);
 }
 
 void loop()
 {
+  uint64_t activeBegin = millis();
+
+  int8_t result = WiFi.waitForConnectResult();
+  if (result != WL_CONNECTED)
+  {
+    goodNight(activeBegin);
+    return;
+  }
+
   if (!mqttClient.connected())
   {
-    reconnect();
+    if (!reconnect())
+    {
+      goodNight(activeBegin);
+      return;
+    }
   }
+  mqttClient.loop();
 
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
@@ -170,6 +197,7 @@ void loop()
 
   //TODO
   //ccs811.set_envdata(hdc1080.getTemperatureAsCCS(), hdc1080.getHumidityAsCCS());
+
   // Read
   uint16_t eco2, etvoc, errstat, raw;
   ccs811.read(&eco2, &etvoc, &errstat, &raw);
@@ -177,23 +205,37 @@ void loop()
   // Print measurement results based on status
   if (errstat == CCS811_ERRSTAT_OK)
   {
-    char co2AsStr[6];
-    sprintf(co2AsStr, "%d", eco2);
+    std::ostringstream payloadStream;
+    payloadStream << "{";
+    payloadStream << "\"CO²\":" << eco2 << ",";
+    payloadStream << "\"VOC\":" << etvoc << ",";
+    payloadStream.precision(2);
+    payloadStream << "\"Temperature\":" << temp << ",";
+    payloadStream.precision(2);
+    payloadStream << "\"Humidity\":" << humid;
+    payloadStream << "}";
+    const char *payload = payloadStream.str().c_str();
 
-    std::string payload = "{\"CO2\":{";
-    payload += "\"Value\":";
-    payload += co2AsStr;
-    payload += ",\"Unit\":\"ppm\"}}";
+    mqttClient.publish(publishTopic, payload);
 
-    mqttClient.publish(publishTopic.c_str(), payload.c_str());
 #if DEBUG
-    //Serial.print("CCS811: "); Serial.print("eco2="); Serial.print(eco2); Serial.print(" ppm  "); Serial.println();
-    /*
-    Serial.print("etvoc="); Serial.print(etvoc); Serial.print(" ppb  ");
-    Serial.print("raw6="); Serial.print(raw / 1024); Serial.print(" uA  ");
-    Serial.print("raw10="); Serial.print(raw % 1024); Serial.print(" ADC  ");
-    Serial.print("R="); Serial.print((1650 * 1000L / 1023) * (raw % 1024) / (raw / 1024)); Serial.print(" ohm");
-    */
+    Serial.print("CCS811: ");
+    Serial.print("eco2=");
+    Serial.print(eco2);
+    Serial.print(" ppm  ");
+    Serial.println();
+    Serial.print("etvoc=");
+    Serial.print(etvoc);
+    Serial.print(" ppb  ");
+    Serial.print("raw6=");
+    Serial.print(raw / 1024);
+    Serial.print(" uA  ");
+    Serial.print("raw10=");
+    Serial.print(raw % 1024);
+    Serial.print(" ADC  ");
+    Serial.print("R=");
+    Serial.print((1650 * 1000L / 1023) * (raw % 1024) / (raw / 1024));
+    Serial.print(" ohm");
 #endif
   }
   else if (errstat == CCS811_ERRSTAT_OK_NODATA)
@@ -217,8 +259,6 @@ void loop()
     Serial.println(ccs811.errstat_str(errstat));
 #endif
   }
-
-  // Wait
   mqttClient.loop();
-  delay(1000);
+  goodNight(activeBegin);
 }
