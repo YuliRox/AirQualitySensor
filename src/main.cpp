@@ -11,6 +11,12 @@
 #include <ESP8266WiFi.h>
 
 #include "config.h"
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+#define DHTPIN 6     // Digital pin connected to the DHT sensor)
+#define DHTTYPE    DHT21     // DHT 21 (AM2301)
 
 #define DEBUG 1
 
@@ -22,8 +28,10 @@
 #define CONSOLELN CONSOLE
 #endif
 
+DHT_Unified dht(DHTPIN, DHTTYPE);
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
+uint32_t delayMS;
 
 std::string publishTopicStr = mqttBaseTopic + "/" + mqttClientId + "/measurements";
 const char *publishTopic = publishTopicStr.c_str();
@@ -33,8 +41,89 @@ CCS811 ccs811(D3); // nWAKE on D3
 HDC1080 hdc1080(0x40);
 uint64_t activeBegin;
 
+
+bool reconnect()
+{
+  // Loop until we're reconnected
+  for (int reconnectTry = 0; reconnectTry < 3; reconnectTry++)
+  {
+#if DEBUG
+    Serial.print("Attempting MQTT connection...");
+#endif
+    // Attempt to connect
+    if (mqttClient.connect(mqttClientId.c_str()))
+    {
+#if DEBUG
+      Serial.println("connected");
+#endif
+      // ... and resubscribe
+      return true;
+    }
+    else
+    {
+#if DEBUG
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+#endif
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+  return false;
+}
+
+void goodNight(uint64_t activeBegin)
+{
+  uint64_t timeTakenMs = ((uint64_t)millis() - activeBegin);
+  if (intervalMs < timeTakenMs)
+  {
+    return;
+  }
+  uint64_t remainingSleep = intervalMs - timeTakenMs;
+
+  delay(remainingSleep);
+}
+
+void initDHT()
+{
+  dht.begin();
+  sensor_t sensor;
+  dht.temperature().getSensor(&sensor);
+
+#if DEBUG
+  Serial.println(F("DHTxx Unified Sensor Example"));
+  // Print temperature sensor details.
+  Serial.println(F("------------------------------------"));
+  Serial.println(F("Temperature Sensor"));
+  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
+  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
+  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
+  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("°C"));
+  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("°C"));
+  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("°C"));
+  Serial.println(F("------------------------------------"));
+#endif
+  // Print humidity sensor details.
+  dht.humidity().getSensor(&sensor);
+#if DEBUG
+  Serial.println(F("Humidity Sensor"));
+  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
+  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
+  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
+  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("%"));
+  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("%"));
+  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
+  Serial.println(F("------------------------------------"));
+  // Set delay between sensor readings based on sensor details.
+#endif
+  delayMS = sensor.min_delay / 1000;
+}
+
 void initSensors()
 {
+
+  initDHT();
 #if DEBUG
   Serial.println("");
   Serial.print("setup: ccs811 lib  version: ");
@@ -135,63 +224,10 @@ void setup()
 
   initSensors();
 
-  //initWiFi();
+  initWiFi();
 }
 
-bool reconnect()
-{
-  // Loop until we're reconnected
-  for (int reconnectTry = 0; reconnectTry < 3; reconnectTry++)
-  {
-#if DEBUG
-    Serial.print("Attempting MQTT connection...");
-#endif
-    // Attempt to connect
-    if (mqttClient.connect(mqttClientId.c_str()))
-    {
-#if DEBUG
-      Serial.println("connected");
-#endif
-      // ... and resubscribe
-      return true;
-    }
-    else
-    {
-#if DEBUG
-      Serial.print("failed, rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" try again in 5 seconds");
-#endif
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
-  return false;
-}
 
-void goodNight(uint64_t activeBegin)
-{
-  uint64_t timeTakenMs = ((uint64_t)millis() - activeBegin);
-  if (intervalMs < timeTakenMs)
-  {
-    return;
-  }
-  uint64_t remainingSleep = intervalMs - timeTakenMs;
-
-  if (remainingSleep < 1000)
-  {
-#if DEBUG
-    Serial.println("going into fake sleep");
-#endif
-    delay(remainingSleep);
-    return;
-  }
-#if DEBUG
-  Serial.println("going into deep sleep");
-#endif
-  //scale to uS and sleep
-  ESP.deepSleep((uint64_t)remainingSleep * (uint64_t)1000, WAKE_RF_DEFAULT);
-}
 
 void sendData(double temp, double humid, uint16_t eco2, uint16_t etvoc)
 {
