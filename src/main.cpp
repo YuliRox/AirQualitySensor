@@ -15,8 +15,8 @@
 #include <DHT.h>
 #include <DHT_U.h>
 
-#define DHTPIN 6     // Digital pin connected to the DHT sensor)
-#define DHTTYPE    DHT21     // DHT 21 (AM2301)
+#define DHTPIN D4     // Digital pin connected to the DHT sensor)
+#define DHTTYPE DHT21 // DHT 21 (AM2301)
 
 #define DEBUG 1
 
@@ -33,14 +33,15 @@ WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 uint32_t delayMS;
 
-std::string publishTopicStr = mqttBaseTopic + "/" + mqttClientId + "/measurements";
-const char *publishTopic = publishTopicStr.c_str();
+std::string publishTopicCcsStr = mqttBaseTopic + "/" + mqttClientId + "/measurements";
+std::string publishTopicDhtStr = mqttBaseTopic + "/" + mqttClientId2 + "/measurements";
+const char *publishTopicCcs = publishTopicCcsStr.c_str();
+const char *publishTopicDht = publishTopicDhtStr.c_str();
 
 // Wiring for ESP8266 NodeMCU boards: VDD to 3V3, GND to GND, SDA to D2, SCL to D1, nWAKE to D3 (or GND)
 CCS811 ccs811(D3); // nWAKE on D3
 HDC1080 hdc1080(0x40);
 uint64_t activeBegin;
-
 
 bool reconnect()
 {
@@ -51,7 +52,7 @@ bool reconnect()
     Serial.print("Attempting MQTT connection...");
 #endif
     // Attempt to connect
-    if (mqttClient.connect(mqttClientId.c_str()))
+    if (mqttClient.connect(mqttClientId.c_str(), mqttUser.c_str(), mqttPassword.c_str()))
     {
 #if DEBUG
       Serial.println("connected");
@@ -88,42 +89,54 @@ void goodNight(uint64_t activeBegin)
 void initDHT()
 {
   dht.begin();
+#if DEBUG
+  Serial.println("DHTxx Unified Sensor Example");
+  // Print temperature sensor details.
   sensor_t sensor;
   dht.temperature().getSensor(&sensor);
-
-#if DEBUG
-  Serial.println(F("DHTxx Unified Sensor Example"));
-  // Print temperature sensor details.
   Serial.println(F("------------------------------------"));
   Serial.println(F("Temperature Sensor"));
-  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
-  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
-  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
-  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("°C"));
-  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("°C"));
-  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("°C"));
+  Serial.print(F("Sensor Type: "));
+  Serial.println(sensor.name);
+  Serial.print(F("Driver Ver:  "));
+  Serial.println(sensor.version);
+  Serial.print(F("Unique ID:   "));
+  Serial.println(sensor.sensor_id);
+  Serial.print(F("Max Value:   "));
+  Serial.print(sensor.max_value);
+  Serial.println(F("°C"));
+  Serial.print(F("Min Value:   "));
+  Serial.print(sensor.min_value);
+  Serial.println(F("°C"));
+  Serial.print(F("Resolution:  "));
+  Serial.print(sensor.resolution);
+  Serial.println(F("°C"));
   Serial.println(F("------------------------------------"));
-#endif
   // Print humidity sensor details.
   dht.humidity().getSensor(&sensor);
-#if DEBUG
   Serial.println(F("Humidity Sensor"));
-  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
-  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
-  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
-  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("%"));
-  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("%"));
-  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
+  Serial.print(F("Sensor Type: "));
+  Serial.println(sensor.name);
+  Serial.print(F("Driver Ver:  "));
+  Serial.println(sensor.version);
+  Serial.print(F("Unique ID:   "));
+  Serial.println(sensor.sensor_id);
+  Serial.print(F("Max Value:   "));
+  Serial.print(sensor.max_value);
+  Serial.println(F("%"));
+  Serial.print(F("Min Value:   "));
+  Serial.print(sensor.min_value);
+  Serial.println(F("%"));
+  Serial.print(F("Resolution:  "));
+  Serial.print(sensor.resolution);
+  Serial.println(F("%"));
   Serial.println(F("------------------------------------"));
-  // Set delay between sensor readings based on sensor details.
 #endif
-  delayMS = sensor.min_delay / 1000;
 }
 
 void initSensors()
 {
 
-  initDHT();
 #if DEBUG
   Serial.println("");
   Serial.print("setup: ccs811 lib  version: ");
@@ -170,6 +183,10 @@ void initSensors()
   Serial.print("setup: hdc manufact.: ");
   Serial.println(hdc1080.readManufacturerId(), HEX);
 #endif
+
+  // Init DHT
+
+  initDHT();
 }
 
 void initWiFi()
@@ -179,15 +196,28 @@ void initWiFi()
   Serial.println(ssid);
 #endif
 
-  WiFi.begin(ssid, pass);
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.setAutoConnect(true);
-  int8_t result = WiFi.waitForConnectResult();
-  if (result != WL_CONNECTED)
+  int8_t wifiStatus = WiFi.begin(ssid, pass);
+  bool isConnected = WiFi.isConnected();
+  while (!isConnected)
   {
-    goodNight(activeBegin);
-    return;
+    int8_t result = WiFi.waitForConnectResult();
+    if (result != WL_CONNECTED)
+    {
+#if DEBUG
+      Serial.println("Unable to connect");
+      Serial.println(result);
+#endif
+      delay(500);
+      continue;
+    }
+
+    if (result == WL_CONNECTED)
+    {
+      isConnected = true;
+    }
   }
 
 #if DEBUG
@@ -197,18 +227,16 @@ void initWiFi()
 #endif
 }
 
-void initMqtt()
+bool initMqtt()
 {
   mqttClient.setServer(brokerServer, brokerPort);
-  mqttClient.connect(mqttClientId.c_str());
+  mqttClient.connect(mqttClientId.c_str(), mqttUser.c_str(), mqttPassword.c_str());
   if (!mqttClient.connected())
   {
-    if (!reconnect())
-    {
-      goodNight(activeBegin);
-      return;
-    }
+    return reconnect();
   }
+
+  return true;
 }
 
 void setup()
@@ -223,35 +251,46 @@ void setup()
 #endif
 
   initSensors();
-
   initWiFi();
 }
 
+void sendDht(float temp, float humid)
+{
 
+  StaticJsonDocument<256> doc;
+  doc["Temperature"] = temp;
+  doc["Humidity"] = humid;
+  std::string payloadStr;
 
-void sendData(double temp, double humid, uint16_t eco2, uint16_t etvoc)
+  serializeJson(doc, payloadStr);
+  mqttClient.publish(publishTopicDht, payloadStr.c_str());
+}
+
+void sendCCS(double temp, double humid, uint16_t eco2, uint16_t etvoc)
 {
   StaticJsonDocument<256> doc;
   doc["CO2"] = eco2;
   doc["VOC"] = etvoc;
   doc["Temperature"] = temp;
   doc["Humidity"] = humid;
-
   std::string payloadStr;
 
   serializeJson(doc, payloadStr);
-
-  initWiFi();
-
-  initMqtt();
-  mqttClient.publish(publishTopic, payloadStr.c_str());
-
-  mqttClient.loop();
-  mqttClient.disconnect();
+  mqttClient.publish(publishTopicCcs, payloadStr.c_str());
 }
+
+/*void sendData(double temp, double humid, uint16_t eco2, uint16_t etvoc, float temp2, float humid2)
+{
+ 
+  sendCCS(temp, humid, eco2, etvoc);
+  sendDht(temp2, humid2);
+
+}*/
 
 void loop()
 {
+  activeBegin = millis();
+
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
   double humid = hdc1080.getHumidity();
@@ -271,13 +310,12 @@ void loop()
   // Read
   uint16_t eco2, etvoc, errstat, raw;
   ccs811.read(&eco2, &etvoc, &errstat, &raw);
+  bool ccsHasData = false;
 
   // Print measurement results based on status
   if (errstat == CCS811_ERRSTAT_OK)
   {
-    sendData(temp, humid, eco2, etvoc);
-
-    goodNight(activeBegin);
+    ccsHasData = true;
 
 #if DEBUG
     Serial.print("CCS811: ");
@@ -296,7 +334,7 @@ void loop()
     Serial.print(" ADC  ");
     Serial.print("R=");
     Serial.print((1650 * 1000L / 1023) * (raw % 1024) / (raw / 1024));
-    Serial.print(" ohm");
+    Serial.println(" ohm");
 #endif
   }
   else if (errstat == CCS811_ERRSTAT_OK_NODATA)
@@ -320,5 +358,64 @@ void loop()
     Serial.println(ccs811.errstat_str(errstat));
 #endif
   }
-  delay(500);
+
+  sensors_event_t event;
+  dht.temperature().getEvent(&event);
+  bool dhtTempHasData = false;
+  float dhtTemp = 0.0f;
+  if (isnan(event.temperature))
+  {
+    Serial.println(F("Error reading temperature!"));
+  }
+  else
+  {
+    dhtTempHasData = true;
+    dhtTemp = event.temperature;
+#if DEBUG
+    Serial.print(F("Temperature: "));
+    Serial.print(event.temperature);
+    Serial.println(F("°C"));
+#endif
+  }
+  // Get humidity event and print its value.
+  dht.humidity().getEvent(&event);
+  bool dhtHumHasData = false;
+  float dhtHum = 0.0f;
+  if (isnan(event.relative_humidity))
+  {
+#if DEBUG
+    Serial.println(F("Error reading humidity!"));
+#endif
+  }
+  else
+  {
+    dhtHumHasData = true;
+    dhtHum = event.relative_humidity;
+#if DEBUG
+    Serial.print(F("Humidity: "));
+    Serial.print(event.relative_humidity);
+    Serial.println(F("%"));
+#endif
+  }
+
+  if (!initMqtt())
+  {
+    goodNight(activeBegin);
+    return;
+  }
+
+  if (ccsHasData)
+  {
+    sendCCS(temp, humid, eco2, etvoc);
+  }
+
+  if (dhtHumHasData && dhtTempHasData)
+  {
+    sendDht(dhtTemp, dhtHum);
+  }
+
+  mqttClient.loop();
+  mqttClient.disconnect();
+
+  goodNight(activeBegin);
 }
