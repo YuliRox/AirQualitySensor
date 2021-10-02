@@ -21,6 +21,11 @@ public:
     bool initDisplay();
     void drawNoWifi(int16_t pos_width, int16_t pos_height, int16_t radius);
     void drawWifi(int16_t pos_width, int16_t pos_height, int16_t radius, int8_t rssi);
+    void drawTemperature(int16_t pos_width, int16_t pos_height, double temp);
+    void drawHumidity(int16_t pos_width, int16_t pos_height, double humid);
+    void drawCo2(int16_t pos_width, int16_t pos_height, uint16_t co2);
+    void drawVoc(int16_t pos_width, int16_t pos_height, uint16_t voc);
+
 
     const int Screenwidth = 128;
     const int Screenheigth = 64;
