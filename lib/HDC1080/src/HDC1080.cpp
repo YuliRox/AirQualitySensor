@@ -1,5 +1,4 @@
 #include <Wire.h>
-
 #include "HDC1080.h"
 
 HDC1080::HDC1080(uint8_t address)
@@ -32,11 +31,6 @@ void HDC1080::setResolution(HDC1080_MeasurementResolution humidity, HDC1080_Meas
 	}
 
 	writeRegister(reg);
-
-	/*Wire.beginTransmission(_address);
-	Wire.write(0x02);
-	Wire.write(0x10);
-	Wire.endTransmission();*/
 }
 
 HDC1080_SerialNumber HDC1080::readSerialNumber()

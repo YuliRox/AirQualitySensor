@@ -6,6 +6,8 @@ const char *pass = "";
 int brokerPort = 1883;
 int brokerIpAdress[] = {0, 0, 0, 0};
 IPAddress brokerServer(brokerIpAdress[0], brokerIpAdress[1], brokerIpAdress[2], brokerIpAdress[3]);
+int apipaIpAdress[] = {167, 254, 164, 30};
+IPAddress apipaIP(apipaIpAdress[0], apipaIpAdress[1], apipaIpAdress[2], apipaIpAdress[3]);
 //const char *brokerServer = "";
 
 const std::string mqttClientId = "IoT-Node-0";

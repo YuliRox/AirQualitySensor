@@ -4,3 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 include/config.h
+include/config.h.Buero
+include/config.h.Schlafzimmer
+include/config.h.Wohnzimmer

@@ -5,16 +5,19 @@
 #include <sstream>
 #include <Wire.h>   // I2C library
 #include "ccs811.h" // CCS811 library
-#include "HDC1080.h"
-//#include <SPI.h>
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 
 #include "config.h"
 #include <Adafruit_Sensor.h>
+
 #include <DHT.h>
 #include <DHT_U.h>
 
+#include <HDC1080.h>
+#include <Oled.h>
+
+#define HAS_DHT 0
 #define DHTPIN D4     // Digital pin connected to the DHT sensor)
 #define DHTTYPE DHT21 // DHT 21 (AM2301)
 
@@ -28,15 +31,20 @@
 #define CONSOLELN CONSOLE
 #endif
 
+#if HAS_DHT
 DHT_Unified dht(DHTPIN, DHTTYPE);
+#endif // HAS_DHT
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 uint32_t delayMS;
+Oled oled;
 
 std::string publishTopicCcsStr = mqttBaseTopic + "/" + mqttClientId + "/measurements";
-std::string publishTopicDhtStr = mqttBaseTopic + "/" + mqttClientId2 + "/measurements";
 const char *publishTopicCcs = publishTopicCcsStr.c_str();
+#if HAS_DHT
+std::string publishTopicDhtStr = mqttBaseTopic + "/" + mqttClientId2 + "/measurements";
 const char *publishTopicDht = publishTopicDhtStr.c_str();
+#endif // HAS_DHT
 
 // Wiring for ESP8266 NodeMCU boards: VDD to 3V3, GND to GND, SDA to D2, SCL to D1, nWAKE to D3 (or GND)
 CCS811 ccs811(D3); // nWAKE on D3
@@ -86,6 +94,7 @@ void goodNight(uint64_t activeBegin)
   delay(remainingSleep);
 }
 
+#if HAS_DHT
 void initDHT()
 {
   dht.begin();
@@ -133,6 +142,7 @@ void initDHT()
   Serial.println(F("------------------------------------"));
 #endif
 }
+#endif // HAS_DHT
 
 void initSensors()
 {
@@ -184,21 +194,29 @@ void initSensors()
   Serial.println(hdc1080.readManufacturerId(), HEX);
 #endif
 
+#if HAS_DHT
   // Init DHT
-
   initDHT();
+#endif // HAS_DHT
 }
 
 void initWiFi()
 {
+  oled.drawNoWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2);
 #if DEBUG
   Serial.print("Connecting to ");
   Serial.println(ssid);
 #endif
 
-  WiFi.mode(WIFI_STA);
+  int8_t setmode = WiFi.mode(WIFI_STA);
+#if DEBUG
+  Serial.println(setmode);
+#endif
   WiFi.setAutoReconnect(true);
   WiFi.setAutoConnect(true);
+#if DEBUG
+  Serial.setDebugOutput(true);
+#endif
   int8_t wifiStatus = WiFi.begin(ssid, pass);
   bool isConnected = WiFi.isConnected();
   while (!isConnected)
@@ -208,7 +226,12 @@ void initWiFi()
     {
 #if DEBUG
       Serial.println("Unable to connect");
+      Serial.print("RC: ");
       Serial.println(result);
+      Serial.print("Wifi Status: ");
+      Serial.println(wifiStatus);
+      Serial.println(WiFi.macAddress());
+      WiFi.printDiag(Serial);
 #endif
       delay(500);
       continue;
@@ -217,6 +240,7 @@ void initWiFi()
     if (result == WL_CONNECTED)
     {
       isConnected = true;
+      oled.drawWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2, 4);
     }
   }
 
@@ -249,11 +273,12 @@ void setup()
     yield();
   }
 #endif
-
+  oled.initDisplay();
   initSensors();
   initWiFi();
 }
 
+#if HAS_DHT
 void sendDht(float temp, float humid)
 {
 
@@ -265,6 +290,7 @@ void sendDht(float temp, float humid)
   serializeJson(doc, payloadStr);
   mqttClient.publish(publishTopicDht, payloadStr.c_str());
 }
+#endif // HAS_DHT
 
 void sendCCS(double temp, double humid, uint16_t eco2, uint16_t etvoc)
 {
@@ -279,16 +305,21 @@ void sendCCS(double temp, double humid, uint16_t eco2, uint16_t etvoc)
   mqttClient.publish(publishTopicCcs, payloadStr.c_str());
 }
 
-/*void sendData(double temp, double humid, uint16_t eco2, uint16_t etvoc, float temp2, float humid2)
-{
- 
-  sendCCS(temp, humid, eco2, etvoc);
-  sendDht(temp2, humid2);
-
-}*/
-
 void loop()
 {
+
+  int8_t wifiSignalStrength = WiFi.RSSI();
+  bool wifiConnected = WiFi.isConnected();
+  IPAddress currentIP = WiFi.localIP();
+   
+  Serial.println(wifiSignalStrength);
+
+  if ( wifiConnected &&  (currentIP =! apipaIP) ){
+     oled.drawWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2, wifiSignalStrength);
+  } else {
+    oled.drawNoWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2);
+  }
+
   activeBegin = millis();
 
   hdc1080.readTempHumid();
@@ -304,8 +335,6 @@ void loop()
   Serial.print(" %  ");
   Serial.println();
 #endif
-  //TODO
-  //ccs811.set_envdata(hdc1080.getTemperatureAsCCS(), hdc1080.getHumidityAsCCS());
 
   // Read
   uint16_t eco2, etvoc, errstat, raw;
@@ -359,6 +388,7 @@ void loop()
 #endif
   }
 
+#if HAS_DHT
   sensors_event_t event;
   dht.temperature().getEvent(&event);
   bool dhtTempHasData = false;
@@ -397,6 +427,7 @@ void loop()
     Serial.println(F("%"));
 #endif
   }
+#endif // HAS_DHT
 
   if (!initMqtt())
   {
@@ -409,10 +440,12 @@ void loop()
     sendCCS(temp, humid, eco2, etvoc);
   }
 
+#if HAS_DHT
   if (dhtHumHasData && dhtTempHasData)
   {
     sendDht(dhtTemp, dhtHum);
   }
+#endif // HAS_DHT
 
   mqttClient.loop();
   mqttClient.disconnect();
