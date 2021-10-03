@@ -23,9 +23,13 @@ public:
     void drawNoWifi(int16_t pos_width, int16_t pos_height, int16_t radius);
     void drawWifi(int16_t pos_width, int16_t pos_height, int16_t radius, int8_t rssi);
     void drawTemperature(int16_t pos_width, int16_t pos_height, double temp);
+    void drawTemperature(int16_t pos_width, int16_t pos_height);
     void drawHumidity(int16_t pos_width, int16_t pos_height, double humid);
+    void drawHumidity(int16_t pos_width, int16_t pos_height);
     void drawCo2(int16_t pos_width, int16_t pos_height, uint16_t co2);
+    void drawCo2(int16_t pos_width, int16_t pos_height);
     void drawVoc(int16_t pos_width, int16_t pos_height, uint16_t voc);
+    void drawVoc(int16_t pos_width, int16_t pos_height);
 
 
     const int Screenwidth = 128;
@@ -33,6 +37,10 @@ public:
 
 private:
     Adafruit_SSD1306 display;
+    void drawThermometer(int16_t pos_width, int16_t pos_height);
+    void drawDrop(int16_t pos_width, int16_t pos_height);
+    void drawCloud(int16_t pos_width, int16_t pos_height);
+    void drawBubbles(int16_t pos_width, int16_t pos_height);
 };
 
 #endif

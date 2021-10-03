@@ -21,7 +21,7 @@
 #define DHTPIN D4     // Digital pin connected to the DHT sensor)
 #define DHTTYPE DHT21 // DHT 21 (AM2301)
 
-#define DEBUG 0
+#define DEBUG 1
 
 #ifdef DEBUG
 #define CONSOLE(...) Serial.print(__VA_ARGS__);
@@ -310,10 +310,9 @@ void loop()
   oled.clear();
   int8_t wifiSignalStrength = WiFi.RSSI();
   bool wifiConnected = WiFi.isConnected();
-  //IPAddress currentIP = WiFi.localIP();
+  IPAddress currentIP = WiFi.localIP();
 
-  //if (wifiConnected && (currentIP = !apipaIP))
-  if (wifiConnected)
+  if (wifiConnected && (currentIP.toString() != "167.254.164.30"))
   {
     oled.drawWifi(oled.Screenwidth - 2, oled.Screenheigth - 2, 2, wifiSignalStrength);
   }
@@ -327,8 +326,8 @@ void loop()
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
   double humid = hdc1080.getHumidity();
-  oled.drawTemperature(5, 36, temp);
-  oled.drawHumidity(5, 52, humid);
+  oled.drawTemperature(0, 34, temp);
+  oled.drawHumidity(0, 50, humid);
 #if DEBUG
   Serial.print("HDC1080: ");
   Serial.print("temp2=");
@@ -349,8 +348,8 @@ void loop()
   if (errstat == CCS811_ERRSTAT_OK)
   {
     ccsHasData = true;
-    oled.drawCo2(5, 4, eco2);
-    oled.drawVoc(5, 20, etvoc);
+    oled.drawCo2(0, 0, eco2);
+    oled.drawVoc(0, 18, etvoc);
 
 #if DEBUG
     Serial.print("CCS811: ");
@@ -374,18 +373,24 @@ void loop()
   }
   else if (errstat == CCS811_ERRSTAT_OK_NODATA)
   {
+    oled.drawCo2(0, 0);
+    oled.drawVoc(0, 18);
 #if DEBUG
     Serial.println("CCS811: waiting for (new) data");
 #endif
   }
   else if (errstat & CCS811_ERRSTAT_I2CFAIL)
   {
+    oled.drawCo2(0, 0);
+    oled.drawVoc(0, 18);
 #if DEBUG
     Serial.println("CCS811: I2C error");
 #endif
   }
   else
   {
+    oled.drawCo2(0, 0);
+    oled.drawVoc(0, 18);
 #if DEBUG
     Serial.print("CCS811: errstat=");
     Serial.print(errstat, HEX);
