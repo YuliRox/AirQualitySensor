@@ -19,6 +19,7 @@ public:
     ~Oled();
     Oled(int16_t width, int16_t heigth);
     bool initDisplay();
+    void clear();
     void drawNoWifi(int16_t pos_width, int16_t pos_height, int16_t radius);
     void drawWifi(int16_t pos_width, int16_t pos_height, int16_t radius, int8_t rssi);
     void drawTemperature(int16_t pos_width, int16_t pos_height, double temp);

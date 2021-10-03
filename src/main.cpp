@@ -21,7 +21,7 @@
 #define DHTPIN D4     // Digital pin connected to the DHT sensor)
 #define DHTTYPE DHT21 // DHT 21 (AM2301)
 
-#define DEBUG 1
+#define DEBUG 0
 
 #ifdef DEBUG
 #define CONSOLE(...) Serial.print(__VA_ARGS__);
@@ -202,7 +202,6 @@ void initSensors()
 
 void initWiFi()
 {
-  oled.drawNoWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2);
 #if DEBUG
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -214,9 +213,7 @@ void initWiFi()
 #endif
   WiFi.setAutoReconnect(true);
   WiFi.setAutoConnect(true);
-#if DEBUG
-  Serial.setDebugOutput(true);
-#endif
+  WiFi.config(IPAddress(192, 168, 50, 110), IPAddress(192, 168, 50, 1), IPAddress(255, 255, 255, 0), IPAddress(192, 168, 50, 100), IPAddress(192, 168, 50, 1));
   int8_t wifiStatus = WiFi.begin(ssid, pass);
   bool isConnected = WiFi.isConnected();
   while (!isConnected)
@@ -224,6 +221,7 @@ void initWiFi()
     int8_t result = WiFi.waitForConnectResult();
     if (result != WL_CONNECTED)
     {
+      oled.drawNoWifi(oled.Screenwidth - 2, oled.Screenheigth - 2, 2);
 #if DEBUG
       Serial.println("Unable to connect");
       Serial.print("RC: ");
@@ -240,7 +238,8 @@ void initWiFi()
     if (result == WL_CONNECTED)
     {
       isConnected = true;
-      oled.drawWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2, 4);
+      oled.clear();
+      oled.drawWifi(oled.Screenwidth - 2, oled.Screenheigth - 2, 2, WiFi.RSSI());
     }
   }
 
@@ -274,6 +273,7 @@ void setup()
   }
 #endif
   oled.initDisplay();
+  delay(500);
   initSensors();
   initWiFi();
 }
@@ -307,17 +307,19 @@ void sendCCS(double temp, double humid, uint16_t eco2, uint16_t etvoc)
 
 void loop()
 {
-
+  oled.clear();
   int8_t wifiSignalStrength = WiFi.RSSI();
   bool wifiConnected = WiFi.isConnected();
-  IPAddress currentIP = WiFi.localIP();
-   
-  Serial.println(wifiSignalStrength);
+  //IPAddress currentIP = WiFi.localIP();
 
-  if ( wifiConnected &&  (currentIP =! apipaIP) ){
-     oled.drawWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2, wifiSignalStrength);
-  } else {
-    oled.drawNoWifi(oled.Screenwidth/2, oled.Screenheigth/2, 2);
+  //if (wifiConnected && (currentIP = !apipaIP))
+  if (wifiConnected)
+  {
+    oled.drawWifi(oled.Screenwidth - 2, oled.Screenheigth - 2, 2, wifiSignalStrength);
+  }
+  else
+  {
+    oled.drawNoWifi(oled.Screenwidth - 2, oled.Screenheigth - 2, 2);
   }
 
   activeBegin = millis();
@@ -325,6 +327,8 @@ void loop()
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
   double humid = hdc1080.getHumidity();
+  oled.drawTemperature(5, 36, temp);
+  oled.drawHumidity(5, 52, humid);
 #if DEBUG
   Serial.print("HDC1080: ");
   Serial.print("temp2=");
@@ -345,6 +349,8 @@ void loop()
   if (errstat == CCS811_ERRSTAT_OK)
   {
     ccsHasData = true;
+    oled.drawCo2(5, 4, eco2);
+    oled.drawVoc(5, 20, etvoc);
 
 #if DEBUG
     Serial.print("CCS811: ");
