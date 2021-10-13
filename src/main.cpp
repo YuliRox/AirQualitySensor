@@ -17,7 +17,7 @@
 #include <HDC1080.h>
 #include <Oled.h>
 
-#define HAS_DHT 0
+#define HAS_DHT 1
 #define DHTPIN D4     // Digital pin connected to the DHT sensor)
 #define DHTTYPE DHT21 // DHT 21 (AM2301)
 
@@ -213,7 +213,7 @@ void initWiFi()
 #endif
   WiFi.setAutoReconnect(true);
   WiFi.setAutoConnect(true);
-  WiFi.config(IPAddress(192, 168, 50, 110), IPAddress(192, 168, 50, 1), IPAddress(255, 255, 255, 0), IPAddress(192, 168, 50, 100), IPAddress(192, 168, 50, 1));
+  WiFi.config(IPAddress(192, 168, 50, 111), IPAddress(192, 168, 50, 1), IPAddress(255, 255, 255, 0), IPAddress(192, 168, 50, 100), IPAddress(192, 168, 50, 1));
   int8_t wifiStatus = WiFi.begin(ssid, pass);
   bool isConnected = WiFi.isConnected();
   while (!isConnected)
@@ -326,8 +326,10 @@ void loop()
   hdc1080.readTempHumid();
   double temp = hdc1080.getTemperature();
   double humid = hdc1080.getHumidity();
+#if !HAS_DHT
   oled.drawTemperature(0, 34, temp);
   oled.drawHumidity(0, 50, humid);
+#endif
 #if DEBUG
   Serial.print("HDC1080: ");
   Serial.print("temp2=");
@@ -412,6 +414,7 @@ void loop()
   {
     dhtTempHasData = true;
     dhtTemp = event.temperature;
+    oled.drawTemperature(0,34,dhtTemp,temp);
 #if DEBUG
     Serial.print(F("Temperature: "));
     Serial.print(event.temperature);
@@ -432,6 +435,7 @@ void loop()
   {
     dhtHumHasData = true;
     dhtHum = event.relative_humidity;
+    oled.drawHumidity(0,50,dhtHum,humid);
 #if DEBUG
     Serial.print(F("Humidity: "));
     Serial.print(event.relative_humidity);

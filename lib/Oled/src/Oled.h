@@ -22,8 +22,10 @@ public:
     void clear();
     void drawNoWifi(int16_t pos_width, int16_t pos_height, int16_t radius);
     void drawWifi(int16_t pos_width, int16_t pos_height, int16_t radius, int8_t rssi);
+    void drawTemperature(int16_t pos_width, int16_t pos_height, float temp2, double temp);
     void drawTemperature(int16_t pos_width, int16_t pos_height, double temp);
     void drawTemperature(int16_t pos_width, int16_t pos_height);
+    void drawHumidity(int16_t pos_width, int16_t pos_height, float humid2, double humid);
     void drawHumidity(int16_t pos_width, int16_t pos_height, double humid);
     void drawHumidity(int16_t pos_width, int16_t pos_height);
     void drawCo2(int16_t pos_width, int16_t pos_height, uint16_t co2);

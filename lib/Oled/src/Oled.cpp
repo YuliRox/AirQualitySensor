@@ -94,6 +94,22 @@ void Oled::drawTemperature(int16_t pos_width, int16_t pos_height)
     display.display();
 }
 
+void Oled::drawTemperature(int16_t pos_width, int16_t pos_height, float temp2, double temp)
+{
+    display.setTextSize(1);
+    drawThermometer(pos_width, pos_height);
+    display.fillCircle(pos_width + 6, pos_height + 10, 3, SSD1306_WHITE);
+    display.setCursor(pos_width + 16, pos_height + 5);
+    display.write(String(temp, 2).c_str());
+    display.write("/");
+    display.write(String(temp2, 2).c_str());
+    display.drawCircle(pos_width + 84, pos_height + 7, 2, SSD1306_WHITE);
+    display.setCursor(pos_width + 88, pos_height + 5);
+    display.write("C");
+    display.display();
+    display.setTextSize(2);
+}
+
 void Oled::drawTemperature(int16_t pos_width, int16_t pos_height, double temp)
 {
     drawThermometer(pos_width, pos_height);
@@ -105,6 +121,19 @@ void Oled::drawTemperature(int16_t pos_width, int16_t pos_height, double temp)
     display.setCursor(pos_width + 88, pos_height);
     display.write("C");
     display.display();
+}
+
+void Oled::drawHumidity(int16_t pos_width, int16_t pos_height, float humid2, double humid){
+    display.setTextSize(1);
+    drawDrop(pos_width, pos_height);
+    display.setCursor(pos_width + 16, pos_height + 5);
+    display.write(String(humid, 2).c_str());
+    display.write("/");
+    display.write(String(humid2, 2).c_str());
+    display.setCursor(pos_width + 76, pos_height + 5);
+    display.write(" %");
+    display.display();
+    display.setTextSize(2);
 }
 
 void Oled::drawHumidity(int16_t pos_width, int16_t pos_height, double humid)
