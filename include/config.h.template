@@ -3,9 +3,26 @@
 const char *ssid = ""; // replace with your wifi ssid and wpa2 key
 const char *pass = "";
 
-int brokerPort = 1883;
-int brokerIpAdress[] = {0, 0, 0, 0};
-IPAddress brokerServer(brokerIpAdress[0], brokerIpAdress[1], brokerIpAdress[2], brokerIpAdress[3]);
 
-const std::string mqttClientId = "IoT-Node-0";
-const std::string mqttBaseTopic = "airquality";
+const int brokerPort = 1883;
+IPAddress brokerServer(0, 0, 0, 0);
+IPAddress nodeAddress(0, 0, 0, 0);
+IPAddress gateway(0, 0, 0, 0);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress dns1(0, 0, 0, 0);
+IPAddress dns2(0, 0, 0, 0);
+
+const int intervalMs = 60000;
+
+const std::string mqttClientId = "NodeMcuClient";
+const std::string mqttClientId2 = "";
+const std::string mqttBaseTopic = "BaseTopic";
+const std::string mqttUser = "username";
+const std::string mqttPassword = "password";
+
+/*
+* 1 - Additional DHT Sensor
+* 0 - Only HDC Sensor
+*/
+
+#define HAS_DHT 0 

@@ -17,19 +17,10 @@
 #include <HDC1080.h>
 #include <Oled.h>
 
-#define HAS_DHT 1
 #define DHTPIN D4     // Digital pin connected to the DHT sensor)
 #define DHTTYPE DHT21 // DHT 21 (AM2301)
 
 #define DEBUG 1
-
-#ifdef DEBUG
-#define CONSOLE(...) Serial.print(__VA_ARGS__);
-#define CONSOLELN(...) Serial.println(__VA_ARGS__);
-#else
-#define CONSOLE(x) ;
-#define CONSOLELN CONSOLE
-#endif
 
 #if HAS_DHT
 DHT_Unified dht(DHTPIN, DHTTYPE);
@@ -213,7 +204,7 @@ void initWiFi()
 #endif
   WiFi.setAutoReconnect(true);
   WiFi.setAutoConnect(true);
-  WiFi.config(IPAddress(192, 168, 50, 111), IPAddress(192, 168, 50, 1), IPAddress(255, 255, 255, 0), IPAddress(192, 168, 50, 100), IPAddress(192, 168, 50, 1));
+  WiFi.config(nodeAddress, gateway, subnet, dns1, dns2);
   int8_t wifiStatus = WiFi.begin(ssid, pass);
   bool isConnected = WiFi.isConnected();
   while (!isConnected)
