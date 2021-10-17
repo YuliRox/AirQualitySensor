@@ -1,6 +1,6 @@
 #ifndef _HDC1080_h
-
 #define _HDC1080_h
+
 #include <Arduino.h>
 
 typedef enum {
@@ -44,6 +44,7 @@ typedef union {
 
 class HDC1080 {
 public:
+	HDC1080();
 	HDC1080(uint8_t address);
 
 	uint16_t readManufacturerId(); // 0x5449 ID of Texas Instruments
@@ -69,6 +70,7 @@ public:
 	uint8_t getHumidityAsCCS();
 
 private:
+	uint8_t defaultAddress = 0x40;
 	uint8_t _address;
 	uint16_t readData(uint8_t pointer);
 

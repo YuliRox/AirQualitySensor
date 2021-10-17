@@ -1,6 +1,13 @@
 #include <Wire.h>
 #include "HDC1080.h"
 
+HDC1080::HDC1080()
+{
+	_address = defaultAddress;
+	temperatureRaw = 0;
+	humidityRaw = 0;
+}
+
 HDC1080::HDC1080(uint8_t address)
 {
 	_address = address;
