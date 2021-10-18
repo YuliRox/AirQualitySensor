@@ -32,6 +32,7 @@ public:
     void drawCo2(int16_t pos_width, int16_t pos_height);
     void drawVoc(int16_t pos_width, int16_t pos_height, uint16_t voc);
     void drawVoc(int16_t pos_width, int16_t pos_height);
+    void setDisplayState(bool state);
 
 
     const int Screenwidth = 128;
@@ -39,6 +40,7 @@ public:
 
 private:
     Adafruit_SSD1306 display;
+    bool displayState = true;
     void drawThermometer(int16_t pos_width, int16_t pos_height);
     void drawDrop(int16_t pos_width, int16_t pos_height);
     void drawCloud(int16_t pos_width, int16_t pos_height);

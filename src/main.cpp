@@ -18,6 +18,8 @@
 #define DHTPIN D4     // Digital pin connected to the DHT sensor)
 #define DHTTYPE DHT21 // DHT 21 (AM2301)
 
+#define INPIN D6
+
 #define DEBUGMODE 0
 
 #if HAS_DHT
@@ -210,6 +212,7 @@ bool initMqtt()
 
 void setup()
 {
+  pinMode(INPIN, INPUT);
   activeBegin = millis();
 #if DEBUGMODE
   Serial.begin(115200);
@@ -219,6 +222,7 @@ void setup()
   }
 #endif
   oled.initDisplay();
+  oled.setDisplayState(digitalRead(INPIN) == HIGH);
   delay(500);
   initSensors();
   initWiFi();
@@ -253,6 +257,10 @@ void sendCCS(double temp, double humid, uint16_t eco2, uint16_t etvoc)
 
 void loop()
 {
+  bool displayState = (digitalRead(INPIN) == HIGH);
+  Serial.print("Display State");
+  Serial.println(displayState);
+  oled.setDisplayState(displayState);
   oled.clear();
   int8_t wifiSignalStrength = WiFi.RSSI();
   bool wifiConnected = WiFi.isConnected();
